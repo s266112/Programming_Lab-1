@@ -3,4 +3,4 @@
 ore = 538/60
 minuti = 538%60
 
-print ("l'equivalente di 538 minuti è {}h: {}min".format (ore, minuti))
+print ("l'equivalente hhhh di 538 minuti è {}h: {}min".format (ore, minuti))
