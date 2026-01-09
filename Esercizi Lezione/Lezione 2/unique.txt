@@ -1,7 +1,0 @@
-Errore di connessione al server.
-Il file è stato salvato correttamente.
-Tentativo di riavvio del sistema in corso...
-Utente disconnesso per inattività.
-Caricamento delle risorse...
-Sincronizzazione completata al 100%.
-Tentativo di riavvio del sistema in corso..
