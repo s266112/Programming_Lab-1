@@ -24,63 +24,78 @@ class CSVTimeSeriesFile:
 
     def __init__ (self, name):
 
-        # Controllo che il nome del file sia una stringa
+        # 1. Controllo che il nome del file sia una stringa
         if not isinstance (name, str):
             raise ExamException ("Il nome del file deve essere una stringa")
         
         self.name = name
 
-        # Controllo che il file esista ed è apribile
+        # 2. Controllo che il file esista ed è apribile in lettura. Se fallisce alzo un'eccezione
         try:
-            open(self.name, 'r').close()                                # Provo ad aprire e chiudere subito il file
+            file = open(self.name, 'r')                                     # Provo ad aprire il file
+            file.close()                                                    # Chiudo il file
         except:
-            raise ExamException ("File non trovato o non apribile")     # Se il file non esiste -> Eccezione subito
+            raise ExamException ("Errore: Impossibile aprire il file")      # Se il file non esiste -> Eccezione 
 
     def get_data(self, city):
 
-        # Controllo che il nome dela città sia una stringa
+        # 1. Controllo input funzione
         if not isinstance (city, str):
             raise ExamException ("Il nome della città deve essere una stringa")
         
-        dati = []                       # Lista che conterrà i dati della città richiesta
+        # Inizializzo la lista dei risultati
+        dati_citta = []
 
-        file = open(self.name, 'r', encoding='utf-8')     # Provo ad aprire il file
-        file.readline()                                   # Salto l'intestazione (la prima riga del file)
+        # Flag per sapere se ho trovato almeno una volta la citta
+        citta_trovata = False
 
-        # Leggo il file riga per riga
+        try:
+            file = open(self.name, 'r')     # Provo ad aprire il file
+            file.readline()                 # Salto l'intestazione (la prima riga del file)
+        except:
+            raise ExamException ("Errore: Impossibile aprire il file")
+
+        # 2. Leggo il file riga per riga
         for riga in file:
             riga = riga.strip()         # Rimuovo spazi bianchi iniziali e finali
-            elementi = riga.split(',')  # Divido la riga in base alle virgole
+            elementi = riga.split(',')  # Divido le colonne
 
-            # Controllo numero colonne
+            # Controllo CSV: mi aspetto almeno 4 colonne
             if len(elementi) < 4:
                 continue                # Se non ci sono almeno 4 elementi salto la riga
 
+            # 3. Estrazione dati
             data = elementi [0]
-            citta = elementi [3].strip().lower()
 
-            # Se la città non è quello richiesto salto la riga
-            if citta != city.strip().lower():
-                continue
+            # Pulizia nome città (tolgo gli spazi e metto minuscolo per confronto sicuro)
+            citta_csv = elementi[3].strip().lower()
+            city_input = city.strip().lower()
 
-            # Controllo che la temperatura sia numerica
+            # 4. Filtro per Citta
+            if citta_csv!= city_input:
+                continue                # Se non è la città che cerco passo alla prosima riga
+
+            # Se arrivo qui, la citta è quella giusta
+            citta_trovata = True
+
+            # 5. Controllo Validità Temperatura
             try:
                 temperatura = float(elementi[1])
             except:
-                continue                # Se non è convertibile in float, salto la riga
+                continue                # Se c'e un valore nullo o testo, salto la riga
 
-            # Aggiungo il dato valido alla lista dei dati
-            dati.append([data, temperatura])
+            # Salvo la coppia [data, temperatura]
+            dati_citta.append([data, temperatura])
 
         # Chiudo il file
         file.close()
 
-        # Se non ho trovato nessun dato valido per la città
-        if len(dati) == 0:
-            raise ExamException ("Città non presente o senza dati validi")
+        # 6. Controllo finale: Se la città non è mai comparsa o non ha dati validi -> Errore
+        if not citta_trovata or len(dati_citta) == 0:
+            raise ExamException ("Errore: La citta non è presente nel file o non ha dati")
         
         # Ritorno alla lista dei dati
-        return dati
+        return dati_citta
     
 
 ## PARTE 2: CALCOLO DEL COEFFICENTE ANGOLARE (10 PUNTI)
@@ -109,97 +124,157 @@ class CSVTimeSeriesFile:
 # 5. Controllo almeno 2 anni validi
 # 6. Applico formula della regressione lineare (slope) per ottenere il coefficente angolare
 
+
+# ---------------------
+# FUNZIONE compute_slope (Calcolo Coefficente Angolare)
+# ---------------------
+
 def compute_slope (time_series, first_year, last_year):
     
-    # -------------------
-    # 1. CONTROLLI INIZIALI
-    # -------------------
-
+    
+    # --- 1. CONTROLLI INIZIALI ---
+    
     # Controllo che gli anni siano interi
     if not isinstance (first_year, int) or not isinstance (last_year, int):
-        raise ExamException ("Gli anni devono essere interi")
+        raise ExamException ("Errore: Gli anni devono essere interi")
     
     # Controllo che l'intervallo sia valido
     if first_year >= last_year:
-        raise ExamException ("Intervallo di anni non valido")
+        raise ExamException ("Errore: Intervallo di anni non valido")
     
     # Controllo che la serie temporale sia una lista
     if not isinstance(time_series, list):
-        raise ExamException ("La serie temporale deve essere una lista")
+        raise ExamException ("Erroe: time_series deve essere una lista")
     
-    # ---------------------
-    # 2. RAGGRUPPAMENTO PER ANNO
-    # ---------------------
-
+    # --- 2. RAGGRUPPAMENTO DATI PER ANNO ---
+    
     dati_per_anno = {}
  
-    for elemento in time_series:
-        data = elemento [0]
-        valore = elemento [1]
+    for row in time_series:
+        data_str = row [0]
+        temp = row [1]
 
         # Estraggo l'anno dalla data (YYYY-MM-DD)
-        anno = int(data.split('-')[0])
+        try:
+            anno = int(data_str.split('-')[0])
+        except:
+            continue            # Salto date malformate
 
-        # Considero solo gli anni nell'intervallo
+        # Considero solo gli anni nell'intervallo richiesto [first, last] inclusi
         if anno < first_year or anno > last_year:
             continue
 
         if anno not in dati_per_anno:
             dati_per_anno[anno] = []
         
-        dati_per_anno[anno].append(valore)
+        dati_per_anno[anno].append(temp)
 
-    # -----------------
-    # 3. FILTRO: ALMENO 6 MESI L'ANNO
-    # ----------------- 
-
-    anni_validi = {}
-
-    for anno in dati_per_anno:
-        if len (dati_per_anno[anno]) >=6:
-            anni_validi[anno] = dati_per_anno[anno]
-
-    # Servono almeno due anni per calcolare la slope
-    if len(anni_validi) < 2:
-        raise ExamException ("Dati insufficenti per calcolare la slope")
     
+    # --- 3. FILTRO "ALMENO 6 MESI" E CALCOLO MEDIE
 
-    # ------------------
-    # 4. CALCOLO MEDIE ANNUALI
-    # ------------------
+    medie_annuali = {}      # Questo sarà il mio asse Y (Temperature)
+    anni_validi = []        # Questo sarà il mio asse X (Anni)
+   
+    for anno, lista_temperature in dati_per_anno.items():
+        if len (lista_temperature) >=6:
+            media = sum(lista_temperature) / len (lista_temperature)
 
-    medie_annuali = {}
+            medie_annuali[anno] = media
+            anni_validi.append(anno)
 
-    for anno in anni_validi:
-        valori = anni_validi[anno]
-        medie_annuali[anno] = sum(valori) / len(valori)
+    # Ordino gli anni per sicurezza (fondamentale per la regressione temporale)
+    anni_validi.sort()
 
-    # --------------------
-    # CALCOLO SLOPE (REGRESSIONE LINEARE)
-    # --------------------
+    # --- 4. CONTROLLI MATEMATICI PRE-CALCOLO ---
 
-    # Lista degli anni (x) e delle medie (y)
-    anni = list(medie_annuali.keys())
-    temperature = list(medie_annuali.values())
+    # Servono almeno 2 punti per fare una retta (quindi una slope)
+    if len(anni_validi) < 2:
+        raise ExamException ("Errore: Dati insufficenti (meno di 2 anni validi) per calcolare la slope")
+    
+    #  --- 5. CALCOLO DELLA SLOPE 
+    # Formula: m = sum((x - media_x) * (y - media_y)) / sum((x - media_x)^2)
 
-    # Media di x e y
-    x_media = sum(anni) / len(anni)
-    y_media = sum(temperature) / len(temperature)
+    # A. Preparo le liste X e Y allineate
+    valori_x = anni_validi                                  # Anni
+    valori_y = [medie_annuali[a] for a in anni_validi]      # Temperature medie corrispondenti
 
-    # Numeratore e denominatore della formula
+    # B. Calcolo le medie totali (x_bar e y_bar)
+    media_x = sum(valori_x) / len(valori_x)
+    media_y = sum(valori_y) / len(valori_y)
+
     numeratore = 0
     denominatore = 0
 
-    for i in range(len(anni)):
-        numeratore += (anni[i] - x_media) * (temperature[i] - y_media)
-        denominatore += (anni[i] - x_media) ** 2
+    # C. sommatorie
+    for i in range(len(valori_x)):
+        x_diff = valori_x[i] - media_x
+        y_diff = valori_y[i] - media_y
 
-    # Se il denominatore è zero non posso dividere
+        numeratore += x_diff * y_diff
+        denominatore += x_diff ** 2
+
+    # D. Controllo divisione per zero
+
     if denominatore == 0:
-        raise ExamException("Impossibile calcolare la slope")
+        raise ExamException("Errore: Impossibile calcolare la slope (denominatore nullo)")
 
     slope = numeratore / denominatore
 
     return slope
+
+# ===============================
+# CODICE DI TEST AUTOMATICO
+# ===============================
+if __name__ == "__main__":
+    print("--- INIZIO TEST ---\n")
+
+    # 1. Creazione file CSV finto
+    filename = "test_slope.csv"
+    csv_data = """dt,AverageTemperature,AverageTemperatureUncertainty,City,Country,Latitude,Longitude
+1900-01-01,10.0,0.5,Rome,Italy,41N,12E
+1900-02-01,10.0,0.5,Rome,Italy,41N,12E
+1900-03-01,10.0,0.5,Rome,Italy,41N,12E
+1900-04-01,10.0,0.5,Rome,Italy,41N,12E
+1900-05-01,10.0,0.5,Rome,Italy,41N,12E
+1900-06-01,10.0,0.5,Rome,Italy,41N,12E
+1901-01-01,20.0,0.5,Rome,Italy,41N,12E
+1901-02-01,20.0,0.5,Rome,Italy,41N,12E
+1901-03-01,20.0,0.5,Rome,Italy,41N,12E
+1901-04-01,20.0,0.5,Rome,Italy,41N,12E
+1901-05-01,20.0,0.5,Rome,Italy,41N,12E
+1901-06-01,20.0,0.5,Rome,Italy,41N,12E
+"""
+    # Spiegazione Test Matematico:
+    # Anno 1900: Ho 6 mesi tutti a 10.0 -> Media 1900 = 10.0
+    # Anno 1901: Ho 6 mesi tutti a 20.0 -> Media 1901 = 20.0
+    # Retta che passa per (1900, 10) e (1901, 20).
+    # Slope (pendenza) = (y2 - y1) / (x2 - x1) = (20 - 10) / (1901 - 1900) = 10 / 1 = 10.0
+
+    try:
+        with open(filename, "w") as f:
+            f.write(csv_data)
+        
+        # Test 1: Lettura
+        print("1️⃣  Lettura file...")
+        ts_file = CSVTimeSeriesFile(filename)
+        data = ts_file.get_data("Rome")
+        print(f"   Dati letti: {len(data)} righe (attese 12).")
+
+        # Test 2: Slope
+        print("\n2️⃣  Calcolo Slope (atteso 10.0)...")
+        slope = compute_slope(data, 1900, 1901)
+        print(f"   Slope calcolata: {slope}")
+        
+        if abs(slope - 10.0) < 0.001:
+            print("   ✅ Test Superato!")
+        else:
+            print("   ❌ Errore nel calcolo.")
+
+    except ExamException as e:
+        print(f"❌ Errore catturato: {e}")
+    except Exception as e:
+        print(f"❌ Errore generico: {e}")
+
+    print("\n--- FINE TEST ---")
 
 

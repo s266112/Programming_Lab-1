@@ -1,0 +1,13 @@
+dt,AverageTemperature,AverageTemperatureUncertainty,City,Country,Latitude,Longitude
+1900-01-01,10.0,0.5,Rome,Italy,41N,12E
+1900-02-01,10.0,0.5,Rome,Italy,41N,12E
+1900-03-01,10.0,0.5,Rome,Italy,41N,12E
+1900-04-01,10.0,0.5,Rome,Italy,41N,12E
+1900-05-01,10.0,0.5,Rome,Italy,41N,12E
+1900-06-01,10.0,0.5,Rome,Italy,41N,12E
+1901-01-01,20.0,0.5,Rome,Italy,41N,12E
+1901-02-01,20.0,0.5,Rome,Italy,41N,12E
+1901-03-01,20.0,0.5,Rome,Italy,41N,12E
+1901-04-01,20.0,0.5,Rome,Italy,41N,12E
+1901-05-01,20.0,0.5,Rome,Italy,41N,12E
+1901-06-01,20.0,0.5,Rome,Italy,41N,12E
