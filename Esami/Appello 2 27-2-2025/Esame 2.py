@@ -36,11 +36,24 @@ class CSVTimeSeriesFile:
 
         # Controllo che il file esista ed è apribile
         try:
-            open(self.name, 'r').close()                                # Provo ad aprire e chiudere subito il file
-        except:
-            raise ExamException ("File non trovato o non apribile")     # Se il file non esiste -> Eccezione subito
+            file = open(self.name, 'r')           # Provo ad aprire il file in lettura
+            linea = file.readline()               # Provo a leggere una riga
+            file.close ()                         # Chiudo il file
 
-    def get_data(self, country):
+            # Controllo se il file è vuoto come richiesto (Avviene dentro il TRY) -> Serve quando funziona tutto ma file vuoto
+            if not linea:
+                raise ExamException ("Errore: Il file è vuoto o non contiene dati validi")
+            
+        # Controllo se il file è apribile
+        except FileNotFoundError:
+            raise ExamException ("Errore: Impossibile aprire il file")
+        
+        # Controllo se il file è vuoto o illegibile (avviene dentro EXCEPT) -> Serve quando qualcosa si rompe mentro cerco di leggere
+        except:
+            raise ExamException ("Errore: Il file è vuoto o non contiene dati validi")
+        
+
+    def get_data(self, country= "Italy"):
 
         # Controllo che il nome del paese sia una stringa
         if not isinstance (country, str):
@@ -48,8 +61,11 @@ class CSVTimeSeriesFile:
         
         dati = []                       # Lista che conterrà i dati del paese richiesto
 
-        file = open(self.name, 'r')     # Provo ad aprire il file
-        file.readline()                 # Salto l'intestazione (la prima riga del file)
+        try:
+            file = open(self.name, 'r')     # Provo ad aprire il file
+            file.readline()                 # Salto l'intestazione (la prima riga del file)
+        except:
+            raise ExamException ("Errore: impossibile aprire il file")
 
         # Leggo il file riga per riga
         for riga in file:
@@ -60,28 +76,29 @@ class CSVTimeSeriesFile:
             if len(elementi) < 3:
                 continue                # Se non ci sono almeno 4 elementi salto la riga
 
-            data = elementi [0]
-            paese = elementi [2].strip().lower()
+            data_str = elementi [0]
+            # Gestione spazi e case-insensitive per il paese
+            paese_row = elementi [2].strip()
 
             # Se il paese non è quello richiesto salto la riga
-            if paese != country.strip().lower():
+            if paese_row.lower () != country.strip().lower():
                 continue
 
             # Controllo che la temperatura sia numerica
             try:
                 temperatura = float(elementi[1])
             except:
-                continue                # Se non è convertibile in float, salto la riga
+                continue               # Salto valori non numerici o vuoti
 
             # Aggiungo il dato valido alla lista dei dati
-            dati.append([data, temperatura])
+            dati.append([data_str, temperatura])
 
         # Chiudo il file
         file.close()
 
         # Se non ho trovato nessun dato valido per il paese
         if len(dati) == 0:
-            raise ExamException ("Paese non presente o senza dati validi")
+            raise ExamException ("Errore: Il nome del Paese non è presente nel file")
         
         # Ritorno alla lista dei dati
         return dati
@@ -115,7 +132,7 @@ class CSVTimeSeriesFile:
 # 4. Calcolo la differenza tra le due serie
 # 5. Ritorno di un dizionario
 
-def compute_variation (time_series_1, time_series_2, first_year, last_year):
+def compute_variations(time_series_1, time_series_2, first_year, last_year):
     
     # -------------------
     # 1. CONTROLLI INIZIALI
@@ -123,9 +140,9 @@ def compute_variation (time_series_1, time_series_2, first_year, last_year):
 
     # Controllo sugli anni
     if not isinstance (first_year, int) or not isinstance (last_year, int):
-        raise ExamException ("Gli anni devono essere interi")
+        raise ExamException ("Errore: L'anno inserito non è un intero")
     
-    if first_year >= last_year:
+    if first_year > last_year:
         raise ExamException ("Intervallo di anni non valido")
     
     # Controllo sulle serie temporali
@@ -133,80 +150,138 @@ def compute_variation (time_series_1, time_series_2, first_year, last_year):
         raise ExamException ("Le serie temporali devono essere liste")
     
     # ---------------------
-    # 2. RAGGRUPPAMENTO PER ANNO
+    # 2. FUNZIONE INTERNA PER CALCOLARE LE MEDIE
     # ---------------------
 
-    # Dizionari anno -> lista di temperature
-    dati_anno_1 = {}
-    dati_anno_2 = {}
+    # Funzione interna per calcolare media annuali
+    def calcola_medie_annuali (time_series):
 
-    # Prima serie temporale
-    for elemento in time_series_1:
-        data = elemento [0]
-        valore = elemento [1]
+        # Punto A: Raggruppo tutte le temperature per anno
+        dati_per_anno = {}
 
-        anno = int(data.split('-')[0])
+        for elem in time_series:
+            data = elem[0]      # La data è una stringa "YYYY-MM-DD"
+            val = elem[1]       # La temperatura è un float
 
-        if anno not in dati_anno_1:
-            dati_anno_1 [anno] = []
+            try:
+                # Prendo solo la prima parte del trattino (YYYY) e converto in itero
+                anno = int(data.split('-')[0])   
+            except:
+                continue            # Se la data è scritta male, la ignoro
 
-        dati_anno_1[anno].append(valore)
+            # Se è la prima volta che incontro questo anno, creo una lista vuota
+            if anno not in dati_per_anno:
+                dati_per_anno[anno] = []
 
-    # Seconda serie temporale
-    for elemento in time_series_2:
-        data = elemento[0]
-        valore = elemento[1]
+            # Aggiungo la temperatura alla lista di quell'anno
+            dati_per_anno[anno]. append(val)
 
-        anno = int(data.split('-')[0])
+        # Punto B: Calcolo la media matematica per ogni anno
+        medie = {}
+        for anno, lista_valori in dati_per_anno.items():
+            # La media si fa solo se la lista non è vuota (per evitare divisioni per zero)
+            if len (lista_valori) > 0:
+                media = sum(lista_valori) / len(lista_valori)
+                medie[anno] = media
 
-        if anno not in dati_anno_2:
-            dati_anno_2[anno] = []
-
-        dati_anno_2[anno].append(valore)
-
-    # -----------------
-    # 3. CALCOLO MEDIE
-    # ----------------- 
-
-    # Dizionari anno -> media annuale
-    medie_anno_1 = {}
-    medie_anno_2 = {}
-
-    for anno in dati_anno_1:
-        valori = dati_anno_1[anno]
-        medie_anno_1[anno] = sum(valori) / len(valori)
+        # Ritorno al dizionario pronto con le medie
+        return medie
     
-    for anno in dati_anno_2:
-        valori = dati_anno_2[anno]
-        medie_anno_2[anno] = sum(valori) / len(valori)
-
+    # Punto C: Uso la funzione interna
+    medie_1 = calcola_medie_annuali(time_series_1)  # Calcolo le medie della prima serie
+    medie_2 = calcola_medie_annuali(time_series_2)  # Calcolo le medie della seconda serie
+    
     # ------------------
-    # 4. CONFRONTO FINALE
-    # ------------------
+    # 3. CALCOLO DIFFERENZE TRA LE DUE SERIE
+    # -----------------
 
-    # Dizionario finale delle variazioni
     variazioni = {}
 
-    for anno in range(first_year, last_year + 1):
+    # Scorro tutti gli anni nell'intervallo richiesto (incluso gli estremi)
+    for anno in range (first_year, last_year + 1):
+        # !!! Per calcolare la differenza, l'anno deve esistere in TUTTE E DUE le serie!!!!
+        if anno in medie_1 and anno in medie_2:
+            differenza = medie_2[anno] - medie_1[anno]
+            variazioni[str(anno)] = differenza
 
-        # Controllo che l'anno sia presente in entrambe le serie
-        if anno not in medie_anno_1 or anno not in medie_anno_2:
-            continue
+    # -----------------
+    # 4. CONTROLLO SUL RISULTATO FINALE
+    # -----------------
 
-        # Calcolo la differenza tra le medie annuali
-        differenza = medie_anno_1[anno] - medie_anno_2[anno]
-
-        variazioni[anno] = differenza
+    # Se il dizionario variazioni è vuoto, allora non c'erano anni in comune nell'intervallo.
+    if not variazioni:
+        raise ExamException("Errore: l'intervallo selezionato non contiene valori validi")
 
     return variazioni
 
 
+# ===================================================================================
+# CODICE DI TEST 
+# ===================================================================================
 
+if __name__ == "__main__":
+    print("--- INIZIO TEST ---\n")
 
+    # 1. Creiamo il file CSV finto per il test
+    filename_test = "GlobalLandTemperatures_Test.csv"
+    csv_content = """dt,AverageTemperature,Country
+1900-01-01,10.0,Italy
+1900-06-01,20.0,Italy
+1900-01-01,12.0,France
+1900-06-01,22.0,France
+1901-01-01,10.0,Italy
+1901-01-01,15.0,France
+2000-01-01,5.0,Italy
+"""
+    try:
+        with open(filename_test, "w") as f:
+            f.write(csv_content)
+        print(f"✅ File '{filename_test}' creato correttamente.\n")
+    except Exception as e:
+        print(f"❌ Errore creazione file: {e}")
 
+    # 2. Esecuzione Test
+    try:
+        # Test 1: Lettura Dati
+        print("1️⃣  Lettura dati Italia e Francia...")
+        f = CSVTimeSeriesFile(filename_test) # Uso la variabile definita qui sopra
+        
+        dati_ita = f.get_data("Italy")
+        print(f"   Dati Italia letti: {len(dati_ita)} righe.")
+        
+        dati_fra = f.get_data("France")
+        print(f"   Dati Francia letti: {len(dati_fra)} righe.")
+        print("   ✅ Lettura OK\n")
 
+        # Test 2: Calcolo Variazioni (Matematica)
+        print("2️⃣  Calcolo Variazioni (France - Italy)...")
+        res = compute_variations(dati_ita, dati_fra, 1900, 1901)
+        print(f"   Risultato: {res}")
+        
+        # Verifica del calcolo per il 1900: (17.0 - 15.0 = 2.0)
+        if "1900" in res and abs(res["1900"] - 2.0) < 0.001:
+            print("   ✅ Calcolo corretto! (17.0 - 15.0 = 2.0)")
+        else:
+            print(f"   ❌ Errore di calcolo o chiave mancante.")
 
+        # Test 3: Eccezioni (File vuoto)
+        print("\n3️⃣  Test File Vuoto...")
+        open("empty_test.csv", "w").close()
+        try:
+            CSVTimeSeriesFile("empty_test.csv")
+            print("   ❌ ERRORE: Doveva scoppiare ma non l'ha fatto!")
+        except ExamException as e:
+            print(f"   ✅ Eccezione catturata: '{e}'")
 
+        # Test 4: Eccezioni (Paese inesistente)
+        print("\n4️⃣  Test Paese Inesistente...")
+        try:
+            f.get_data("Giappone")
+            print("   ❌ ERRORE: Doveva scoppiare per paese mancante!")
+        except ExamException as e:
+            print(f"   ✅ Eccezione catturata: '{e}'")
 
+    except Exception as e:
+        print(f"\n❌ ERRORE IMPREVISTO NEL TEST: {e}")
 
-
+    print("\n--- FINE TEST ---")
