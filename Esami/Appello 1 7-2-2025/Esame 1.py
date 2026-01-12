@@ -33,19 +33,21 @@ class CSVTimeSeriesFile:
 
         # Provo ad aprire il file
         try:
-            open(self.name, 'r').close()                            # Provo ad aprire e chiudere subito il file
+            open(self.name, 'r').close()                                         # Provo ad aprire e chiudere subito il file
         except:
-            raise Exception("File non trovato o non apribile")      # Se il file non esiste -> Eccezione subito
+            raise ExamException ("Errore: File non trovato o non apribile")      # Se il file non esiste -> Eccezione subito
 
 # Metodo get_data
     def get_data (self):
         lista_dati = []                 # Inizializzo la lista dei dati validi
 
         # Provo ad aprire il file
-        file = open(self.name, 'r')
-        
-        # Leggere e saltare l'intestazione
-        file.readline()                 # Salto l'intestazione (la prima riga) del file
+        try: 
+            file = open(self.name, 'r')
+            file.readline()                 # Salto l'intestazione (la prima riga) del file
+        except:
+            raise ExamException ("Errore in lettura file")
+
 
         # Leggo il file riga per riga
         for riga in file:
@@ -64,12 +66,15 @@ class CSVTimeSeriesFile:
             try:
                 valore = float(elementi[1])
             except:
-                continue  # Se non è convertibile in float, salto la riga
+                continue        # Se non è convertibile in float, salto la riga
+
+            if valore < 0:
+                continue        # Se il valore è negativo non deve essere accettato
 
             # Aggiungo il dato valido alla lista dei dati
             lista_dati.append([data, valore])
 
-            # Chiudo il file e ritorno la lista dei dati
+        # Chiudo il file e ritorno la lista dei dati
         file.close()
         return lista_dati
     
@@ -109,6 +114,9 @@ def compute_variations(time_series, first_year, last_year, N):
     if first_year >= last_year:
         raise ExamException ("Intervallo di anni non valido")
     
+    if N>= (last_year - first_year + 1):
+        raise ExamException ("Il parametro deve essere minore dell'intervallo considerato")
+    
     #--------------------------
     # RAGGRUPPO I DATI PER ANNO
     #--------------------------
@@ -119,9 +127,10 @@ def compute_variations(time_series, first_year, last_year, N):
         data = elemento[0]
         valore = elemento[1]
 
-        # Estraggo l'anno in modo robusto (funziona con tutti i formati)
+        # Estraggo l'anno
         try:
-            anno = int(data[:4])    # Estraggo l'anno dalla data
+            # Assumo che i primi 4 caratteri siano l'anno (es. 1900/01)
+            anno = int(data[:4]) 
         except:
             continue                # Se non riesco ad estrarre l'anno, salto questo elemento
 
@@ -130,22 +139,17 @@ def compute_variations(time_series, first_year, last_year, N):
         
         dati_per_anno[anno].append(valore)
 
-    #--------------------------
-    # CONTROLLO CHE GLI ANNI NECCESSARI ESISTANO NEI DATI
-    #--------------------------
 
-    for anno in range(first_year - N, last_year + 1):
-        if anno not in dati_per_anno:
-            raise ExamException("Anno mancante nella serie temporale")
-        
     #--------------------------
     # CALCOLO LA MEDIA ANNUALE PER CIASCUN ANNO
     #--------------------------
     medie_annuali = {}
 
+    # Calcolo la media solo se ho i dati per quell'anno
     for anno in dati_per_anno:
         valori = dati_per_anno[anno]
-        medie_annuali[anno] = sum(valori) / len(valori)
+        if len(valori) > 0:
+            medie_annuali[anno] = sum(valori) / len(valori)
 
     #--------------------------
     # CALCOLO LE VARIAZIONI ANNO PER ANNO
@@ -153,18 +157,35 @@ def compute_variations(time_series, first_year, last_year, N):
 
     variazioni = {}
 
-    for anno in range (first_year, last_year + 1):
-        somma_precedenti = 0
+    # Ciclo sugli anni richiesti dall'intervallo
+    for anno_target in range (first_year, last_year + 1):
 
+        # Se l'anno target non ha dati, non posso calcolare nulla
+        if anno_target not in medie_annuali:
+            continue
+
+        # Controllo se esistano gli N anni precedenti
+        # Gli anni precedenti sono: anno-1, anno-2... fino a anno-N
+        anni_precedenti_ok = True
+        somma_precedenti = 0
+        
         # Media dei N anni precedenti
         for i in range (1, N + 1):
-            somma_precedenti += medie_annuali[anno - i]
+            anno_prev = anno_target - i
+            if anno_prev in medie_annuali:
+                somma_precedenti += medie_annuali[anno_prev]
+            else:
+                anni_precedenti_ok = False
+                break                       # Manca un anno precedente, interrompo
 
-        media_precedenti = somma_precedenti / N
+        # Se ho tutti gli anni precedenti necessari, calcolo la variazione
+        if anni_precedenti_ok:
+            media_mobile = somma_precedenti / N
+            diff = medie_annuali[anno_target] - media_mobile
 
-        # Variazione rispetto alla media dei N anni precedenti
-        variazioni[str(anno)] = medie_annuali[anno] - media_precedenti
-
+            # Salvo nel dizionario (chiave stringa come esempio esame)
+            variazioni[str(anno_target)] = diff
+            
         # Ritorno risultato
     return variazioni
 
